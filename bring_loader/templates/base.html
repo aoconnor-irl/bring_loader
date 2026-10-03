@@ -1,0 +1,5 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#21594c"><title>{% block title %}Bring Loader{% endblock %}</title><link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}"></head><body>
+<header><div class="wrap header"><a class="brand" href="{{ url_for('index') }}">Bring Loader</a>{% if session.logged_in %}<nav><a href="{{ url_for('index') }}">Shop</a><a href="{{ url_for('groups') }}">Groups</a><a href="{{ url_for('items') }}">Items</a><a href="{{ url_for('settings') }}">Settings</a></nav>{% endif %}</div></header>
+<main class="wrap">{% with messages=get_flashed_messages() %}{% if messages %}<div class="notice">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}{% endwith %}{% block body %}{% endblock %}</main>
+{% if session.logged_in %}<footer class="wrap"><form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="text-button">Sign out</button></form></footer>{% endif %}
+</body></html>

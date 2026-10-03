@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+data/
+instance/
+*.sqlite3
+*.sqlite3-*
+private_data/
+oauth_client.json
+token.json

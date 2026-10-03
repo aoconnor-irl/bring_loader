@@ -1,0 +1,13 @@
+services:
+  bring-loader:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_PATH: /app/data/bring_loader.sqlite3
+      APP_BIND: 0.0.0.0
+      APP_PORT: 8723
+    ports:
+      - "${HOST_BIND:-127.0.0.1}:${APP_PORT:-8723}:8723"
+    volumes:
+      - ./data:/app/data
