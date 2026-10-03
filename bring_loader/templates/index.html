@@ -1,2 +1,77 @@
-{% extends 'base.html' %}{% block body %}<div class="page-title"><div><h1>Make a shopping list</h1><p>Choose your groups. Set a count above 1 to include a group more than once.</p></div></div>
-{% if groups %}<form method="post" action="{{ url_for('preview') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><div class="stack">{% for group in groups %}<div class="card group-row"><div><strong>{{ group.name }}</strong><small>{{ group.item_count }} items</small></div><label class="count">Count<input type="number" inputmode="numeric" name="count_{{ group.id }}" value="0" min="0" max="99"></label></div>{% endfor %}</div><div class="sticky"><button>Preview combined list</button></div></form>{% else %}<div class="card"><p>No groups yet.</p><a class="button" href="{{ url_for('groups') }}">Create a group</a></div>{% endif %}{% endblock %}
+{% extends 'base.html' %}
+
+{% block body %}
+<div class="page-title">
+    <h1>Make a shopping list</h1>
+    <p>Choose your groups using the + and − buttons.</p>
+</div>
+
+{% if groups %}
+<form method="post" action="{{ url_for('preview') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+
+    <div class="stack">
+        {% for group in groups %}
+        <div class="card group-row">
+            <div>
+                <strong>{{ group.name }}</strong>
+                <small>{{ group.item_count }} items</small>
+            </div>
+
+            <div class="count-controls">
+                <button
+                    type="button"
+                    class="count-button"
+                    data-change="-1"
+                    aria-label="Remove one {{ group.name }}"
+                    disabled
+                >−</button>
+
+                <span class="count-value" aria-live="polite">0</span>
+                <input type="hidden" name="count_{{ group.id }}" value="0">
+
+                <button
+                    type="button"
+                    class="count-button"
+                    data-change="1"
+                    aria-label="Add one {{ group.name }}"
+                >+</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="sticky">
+        <button type="submit">Preview combined list</button>
+    </div>
+</form>
+
+<script>
+    document.querySelectorAll(".count-controls").forEach((controls) => {
+        const input = controls.querySelector('input[type="hidden"]');
+        const display = controls.querySelector(".count-value");
+        const minus = controls.querySelector('[data-change="-1"]');
+        const plus = controls.querySelector('[data-change="1"]');
+
+        controls.querySelectorAll(".count-button").forEach((button) => {
+            button.addEventListener("click", () => {
+                const count = Math.max(
+                    0,
+                    Math.min(99, Number(input.value) + Number(button.dataset.change))
+                );
+
+                input.value = count;
+                display.textContent = count;
+                minus.disabled = count === 0;
+                plus.disabled = count === 99;
+            });
+        });
+    });
+</script>
+{% else %}
+<div class="card">
+    <p>No groups yet.</p>
+    <a class="button" href="{{ url_for('groups') }}">Create a group</a>
+</div>
+{% endif %}
+{% endblock %}

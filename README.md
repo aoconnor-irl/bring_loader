@@ -1,10 +1,81 @@
 # Bring Loader
 
-A small household shopping list generator. Define reusable groups of items (meals, bathroom supplies, etc.), select groups with counts, preview the combined quantities and send the result to one Bring! list. One app password and one Bring! account are shared by the household.
+A simple shopping list generator for recurring purchases.
 
-## Windows 11: first run
+Create reusable groups—such as meals, bathroom supplies or cleaning products—select how many times to include each group, then send the combined shopping list to Bring!.
 
-Install Python 3.12 or later and ensure `py` works in PowerShell. In the project directory:
+## Features
+
+- Mobile-friendly interface with +/− quantity controls.
+- Reusable shopping groups and a shared item catalogue.
+- One standard unit per item, so quantities combine consistently.
+- Preview the combined list before sending.
+- Bring! account and destination list configured through the app.
+- SQLite storage with persistent Docker data.
+- One shared app login per installation.
+
+Bring Loader uses the community `bring-api` package and is not affiliated with Bring!.
+
+## Install with Docker Compose
+
+Requires Docker with Docker Compose.
+
+Clone the repository and create your configuration:
+
+```bash
+git clone https://github.com/aoconnor-irl/bring_loader.git
+cd bring_loader
+cp .env.example .env
+```
+
+Generate the two configuration keys:
+
+```bash
+docker run --rm python:3.12-slim python -c "import secrets; print(secrets.token_urlsafe(48))"
+docker compose build
+docker compose run --rm --no-deps bring-loader python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Put the first output in `.env` as `APP_SECRET_KEY` and the second as `ENCRYPTION_KEY`.
+
+Copy each value exactly, without quotes. Preserve the trailing `=` on the encryption key. Keep both keys unchanged after setup.
+
+For access from other devices on your network, set `HOST_BIND` to the Docker host's LAN IP. The default, `127.0.0.1`, allows access only from the host itself.
+
+On Linux, prepare the persistent data directory:
+
+```bash
+mkdir -p data
+sudo chown 10001:10001 data
+chmod 600 .env
+```
+
+Start the application and set an app password:
+
+```bash
+docker compose up -d
+docker compose exec -it bring-loader flask --app bring_loader.app:create_app set-password
+```
+
+Use a password of at least **8 characters**.
+
+Open `http://<host-address>:8723` and sign in. The container restarts automatically with Docker unless it has been deliberately stopped.
+
+## Using the app
+
+1. Open **Settings**, save your Bring! account details, then connect and select a list.
+2. Create items in the **Item catalogue**, choosing their usual units. A blank unit means a simple count.
+3. Create **Groups** and add items with quantities.
+4. On **Shop**, use +/− to select groups and counts.
+5. Preview the combined quantities and send them to Bring!.
+
+The app sends all selected items. Make any shopping-run adjustments in Bring! afterwards.
+
+Sending assumes the destination list is empty. It does not clear the list or inspect existing items. If sending fails partway through, check Bring! before retrying because some items may already have been added.
+
+## Local development on Windows
+
+Requires Python 3.12 or later. Run these commands in PowerShell from the project directory:
 
 ```powershell
 py -3 -m venv .venv
@@ -14,58 +85,91 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Put those two outputs in `.env` as `APP_SECRET_KEY` and `ENCRYPTION_KEY`. Keep the values stable: changing the encryption key makes saved Bring! credentials unreadable. Do not commit `.env` or your data directory. In PowerShell, load the settings for this terminal session:
+Set `APP_SECRET_KEY` and `ENCRYPTION_KEY` in `.env` using the generated values.
+
+Load the configuration and set your app password:
 
 ```powershell
 Get-Content .env | ForEach-Object { if ($_ -match '^([^#=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process') } }
 .\.venv\Scripts\flask.exe --app bring_loader.app:create_app set-password
+```
+
+Start the application:
+
+```powershell
 .\.venv\Scripts\python.exe run.py
 ```
 
-Visit <http://127.0.0.1:8723>. Set a password of at least 12 characters. The password setup command can also change it later. `run.py` runs the same application code used by Docker, with a production WSGI server. For phone testing from the same Wi-Fi, set `APP_BIND` to your Windows PC LAN IP for that terminal session and allow that port through Windows Firewall on the private network. Do not expose the development PC to the Internet.
+Open http://127.0.0.1:8723.
 
-## Import your Google Sheets exports
+Reload `.env` whenever you open a new PowerShell session. Stop the app with **Ctrl+C** before restarting it.
 
-Export **Meals** and **Ingredients** as CSV. Stop the app while doing the one-time import. It imports into a *new* database and refuses to overwrite an existing one:
+To test from another device on the same network, set `APP_BIND` to your PC's LAN IP before starting and allow the application port through Windows Firewall on the private network.
+
+## Optional CSV import
+
+The importer accepts two CSV files:
+
+| File | Required columns |
+|---|---|
+| Groups | `Meal` |
+| Group items | `Meal`, `Ingredient`, `Quantity`, `Measurement` |
+
+Example files are included in `sample_data/`. The column name `Meal` can represent any shopping group.
+
+Import before starting the app or setting its password. The importer requires a new database path and refuses to overwrite an existing database.
 
 ```powershell
-.\.venv\Scripts\python.exe -m bring_loader.import_csv "C:\path\Meals.csv" "C:\path\Ingredients.csv" "data\bring_loader.sqlite3"
+.\.venv\Scripts\python.exe -m bring_loader.import_csv "Meals.csv" "Ingredients.csv" "data\bring_loader.sqlite3"
 ```
 
-Create the app password after importing, or run the import before the first app start. If the app already created `data\bring_loader.sqlite3`, back it up, delete the empty copy, import, then run `set-password` again. The importer rejects unexpected unit conflicts, duplicate group names, bad quantities, and unknown group references before creating a database. Adam's original export has explicit unit resolutions for Onion (blank/count), Lettuce (bag), and Rice (cup); inspect those defaults before applying the importer to other people's exports. For generic exports, adjust `UNIT_RESOLUTIONS` in `bring_loader/import_csv.py` or clear it to require explicit reconciliation.
+The importer validates names, quantities and group references. Review `UNIT_RESOLUTIONS` in `bring_loader/import_csv.py` before importing: it currently contains legacy resolutions for Onion, Lettuce and Rice. Clear or adapt those mappings for your data.
 
-## Bring! settings and sending
+Keep personal exports in `private_data/`, which is excluded from Git.
 
-Sign in, open **Settings**, enter the Bring! email and password, choose **Connect and choose list**, then select the destination list. The password is encrypted using `ENCRYPTION_KEY` before it is stored in SQLite and is never displayed again. Select groups on **Shop**, preview, and send. Sending assumes the Bring! list starts empty and does not clear or inspect existing items. If a send fails partway through, check Bring! before retrying to avoid duplicates. Bring! integration uses the community `bring-api` package and may require updating if Bring! changes its service.
+## Updates
 
-## Docker Compose (later, after local testing)
-
-Copy the project to your Ubuntu host and create `.env` from `.env.example` with **persistent** keys. Set `HOST_BIND` to your server's LAN IP, or leave it on `127.0.0.1` behind a local reverse proxy. `data/` is bind-mounted to `/app/data`, so the database survives container recreation and reboots. On Linux, create and assign the data directory to container UID 10001 before starting:
+Back up your database and configuration before updating.
 
 ```bash
-mkdir -p data
-sudo chown 10001:10001 data
+git pull
 docker compose up -d --build
-docker compose exec -it bring-loader flask --app bring_loader.app:create_app set-password
+docker compose logs --tail=100 bring-loader
 ```
 
-For updates: back up `data/` and `.env`, pull the new source, run `docker compose up -d --build`, and check `docker compose logs --tail=100 bring-loader`. This project has no automatic schema migrations yet; future schema changes must include a documented migration before an update.
+Check release instructions for any database changes. Automatic schema migrations are not currently implemented.
 
-For a consistent backup, stop the container, copy `data/bring_loader.sqlite3` and the protected `.env` to a secure location, then restart:
+## Backup and restore
+
+Back up both:
+
+- `data/bring_loader.sqlite3`
+- `.env`
+
+The database contains your groups, items, app password hash and encrypted Bring! password. The encryption key in `.env` is required to recover the saved Bring! credentials.
+
+For a consistent file backup, stop the application before copying these files, then start it again:
 
 ```bash
 docker compose stop bring-loader
-cp data/bring_loader.sqlite3 /path/to/secure-backup/bring_loader.sqlite3
-cp .env /path/to/secure-backup/bring_loader.env
+# Copy the database and .env to your protected backup location.
 docker compose start bring-loader
 ```
 
-To restore, stop the container, restore both files together, check ownership (`10001:10001` for the database), then start it. The encryption key in the backed-up `.env` is required to read stored Bring! credentials. `docker compose down` does not remove the bind-mounted data directory; still keep backups.
+To restore, stop the application, restore both files, ensure the data directory and database are writable by container UID `10001` on Linux, then start it again.
 
-The app login protects its pages, but a plain HTTP connection on the LAN does not encrypt traffic in transit. If you later open access beyond the LAN or tailnet, use HTTPS through a reverse proxy and set `COOKIE_SECURE=1`. Review access rules before exposing the service.
+## Configuration and privacy
 
-## Repository hygiene
+Do not commit `.env`, databases, personal exports or credentials. These paths are excluded by `.gitignore`.
 
-Only the fictional CSVs in `sample_data/` are intended for a public repository. Original exports, SQLite databases, `.env`, tokens, credentials and server-specific configuration stay local. Before publishing, inspect `git status` and `git diff --cached --name-only` and check for secrets. The repository can be named `bring_loader`; the package and display name can be changed later.
+Bring! passwords are encrypted before storage. Keep backups containing the database and encryption key protected.
 
-Run the initial data-layer checks with `py -3 -m unittest discover -s tests`. Bring! live calls require your own credentials and are never made by automated checks.
+For access over the Internet, configure HTTPS through a reverse proxy and set `COOKIE_SECURE=1`.
+
+## Tests
+
+```powershell
+py -3 -m unittest discover -s tests
+```
+
+Automated tests do not send anything to Bring!.

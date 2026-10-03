@@ -351,8 +351,8 @@ def create_app(test_config=None):
     def set_password():
         import getpass
         password = getpass.getpass("New app password: ")
-        if len(password) < 12:
-            raise SystemExit("Use at least 12 characters")
+        if len(password) < 8:
+            raise SystemExit("Use at least 8 characters")
         confirm = getpass.getpass("Confirm: ")
         if password != confirm:
             raise SystemExit("Passwords did not match")
